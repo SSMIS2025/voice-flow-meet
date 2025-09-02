@@ -61,6 +61,21 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				recording: {
+					DEFAULT: 'hsl(var(--recording))',
+					foreground: 'hsl(var(--recording-foreground))'
+				},
+				speaker: {
+					1: 'hsl(var(--speaker-1))',
+					2: 'hsl(var(--speaker-2))',
+					3: 'hsl(var(--speaker-3))',
+					4: 'hsl(var(--speaker-4))',
+					5: 'hsl(var(--speaker-5))'
+				},
+				voice: {
+					wave: 'hsl(var(--voice-wave))',
+					inactive: 'hsl(var(--voice-inactive))'
 				}
 			},
 			borderRadius: {
@@ -84,11 +99,40 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-recording': {
+					'0%, 100%': {
+						opacity: '1',
+						transform: 'scale(1)'
+					},
+					'50%': {
+						opacity: '0.7',
+						transform: 'scale(1.05)'
+					}
+				},
+				'wave-bounce': {
+					'0%, 100%': {
+						transform: 'scaleY(1)'
+					},
+					'50%': {
+						transform: 'scaleY(1.5)'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-recording': 'pulse-recording var(--pulse-duration) ease-in-out infinite',
+				'wave-bounce': 'wave-bounce 1s ease-in-out infinite'
+			},
+			backgroundImage: {
+				'gradient-primary': 'var(--gradient-primary)',
+				'gradient-recording': 'var(--gradient-recording)',
+				'gradient-card': 'var(--gradient-card)'
+			},
+			boxShadow: {
+				'primary': 'var(--shadow-primary)',
+				'recording': 'var(--shadow-recording)'
 			}
 		}
 	},
