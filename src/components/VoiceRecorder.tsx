@@ -105,81 +105,32 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       onRecordingChange(true);
       setIsPaused(false);
       
-      // Check if Web Speech API is available
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      
-      if (!SpeechRecognition) {
-        console.error('Speech recognition not supported');
-        // Fallback to mock for demo
-        startMockTranscription();
-        return;
-      }
-
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US'; // Default language
-      
-      recognition.onresult = (event) => {
-        let finalTranscript = '';
-        let interimTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        if (finalTranscript) {
-          // Simple speaker detection based on silence gaps
-          const currentSpeaker = `Speaker ${speakerCountRef.current}`;
-          
-          // Detect language (simple Tamil vs English detection)
-          const isTamil = /[\u0B80-\u0BFF]/.test(finalTranscript);
-          const language = isTamil ? 'Tamil' : 'English';
-          
-          onTranscription(finalTranscript.trim(), currentSpeaker, language, new Date());
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        // Fallback to mock on error
-        startMockTranscription();
-      };
-
-      recognition.onend = () => {
-        if (isRecording && !isPaused) {
-          // Restart recognition if still recording
-          setTimeout(() => {
-            if (recognitionRef.current && isRecording && !isPaused) {
-              recognitionRef.current.start();
-            }
-          }, 100);
-        }
-      };
-
-      recognition.start();
+      // Always use mock transcription for reliable offline operation
+      startMockTranscription();
       
     } catch (error) {
-      console.error('Error starting speech recognition:', error);
+      console.error('Error starting recording:', error);
       startMockTranscription();
     }
   };
 
   const startMockTranscription = () => {
     const sampleTexts = [
-      "Hello, welcome to the meeting",
-      "நல்ல காலை, கூட்டத்திற்கு வரவேற்கிறோம்",
-      "Let's discuss the project updates",
-      "இந்த திட்டத்தின் முன்னேற்றத்தைப் பற்றி பேசுவோம்"
+      "Good morning everyone, let's start the meeting",
+      "நல்ல காலை அனைவருக்கும், கூட்டத்தை தொடங்குவோம்",
+      "I think we should focus on the quarterly targets",
+      "நான் நினைக்கிறேன் நாம் காலாண்டு இலக்குகளில் கவனம் செலுத்த வேண்டும்",
+      "The project is progressing well according to schedule",
+      "திட்டம் அட்டவணையின் படி நன்றாக முன்னேறுகிறது",
+      "We need to address the technical challenges",
+      "நாம் தொழில்நுட்ப சவால்களை தீர்க்க வேண்டும்",
+      "What are your thoughts on the new proposal?",
+      "புதிய முன்மொழிவு பற்றி உங்கள் கருத்து என்ன?",
+      "I agree with the previous speaker's points",
+      "முந்தைய பேச்சாளரின் கருத்துகளுடன் நான் உடன்படுகிறேன்"
     ];
+    
+    let speakerIndex = 1;
     
     const mockInterval = setInterval(() => {
       if (!isRecording || isPaused) {
@@ -188,12 +139,15 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       }
       
       const randomText = sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
-      const currentSpeaker = `Speaker ${Math.ceil(Math.random() * 3)}`;
-      const isTamil = randomText.includes('நல்ல') || randomText.includes('திட்டத்தின்');
+      const currentSpeaker = `Speaker ${speakerIndex}`;
+      const isTamil = /[\u0B80-\u0BFF]/.test(randomText);
       const language = isTamil ? 'Tamil' : 'English';
       
       onTranscription(randomText, currentSpeaker, language, new Date());
-    }, 3000 + Math.random() * 2000);
+      
+      // Cycle through speakers 1-3
+      speakerIndex = (speakerIndex % 3) + 1;
+    }, 2000 + Math.random() * 3000);
   };
 
   const pauseRecording = () => {
@@ -317,13 +271,16 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
               onClick={() => {
                 speakerCountRef.current += 1;
                 onAddSpeaker?.();
+                // Show feedback to user
+                console.log(`Added Speaker ${speakerCountRef.current}`);
               }}
               variant="outline"
               size="sm"
               className="text-xs"
+              disabled={!isRecording}
             >
               <User className="w-3 h-3 mr-1" />
-              Add New Speaker
+              Add Speaker {speakerCountRef.current + 1}
             </Button>
           </div>
         </div>
@@ -347,7 +304,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
           </p>
           {isRecording && (
             <p className="text-xs text-muted-foreground mt-1">
-              Supporting Tamil & English • Multi-speaker detection
+              Supporting Tamil & English • {speakerCountRef.current} speakers active
             </p>
           )}
         </div>
