@@ -1,19 +1,39 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Mic, MicOff, Pause, Play, Square } from 'lucide-react';
+import { Mic, MicOff, Pause, Play, Square, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceRecorderProps {
   onTranscription: (text: string, speaker: string, language: string, timestamp: Date) => void;
   isRecording: boolean;
   onRecordingChange: (recording: boolean) => void;
+  onAddSpeaker?: () => void;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: (event: any) => void;
+  onerror: (event: any) => void;
+  onend: () => void;
 }
 
 const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   onTranscription,
   isRecording,
   onRecordingChange,
+  onAddSpeaker,
 }) => {
   const [isPaused, setIsPaused] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -77,38 +97,103 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     setAudioLevel(0);
   };
 
-  const startRecording = () => {
-    onRecordingChange(true);
-    setIsPaused(false);
-    
-    // Simulate transcription (replace with actual speech recognition)
-    const mockTranscription = () => {
-      const sampleTexts = [
-        "Hello, welcome to the meeting",
-        "நல்ல காலை, கூட்டத்திற்கு வரவேற்கிறோம்",
-        "Let's discuss the project updates",
-        "இந்த திட்டத்தின் முன்னேற்றத்தைப் பற்றி பேசுவோம்"
-      ];
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const speakerCountRef = useRef(1);
+
+  const startRecording = async () => {
+    try {
+      onRecordingChange(true);
+      setIsPaused(false);
       
-      const speakers = ["Speaker 1", "Speaker 2", "Speaker 3"];
-      const languages = ["English", "Tamil"];
+      // Check if Web Speech API is available
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       
-      setTimeout(() => {
-        if (isRecording && !isPaused) {
-          const randomText = sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
-          const randomSpeaker = speakers[Math.floor(Math.random() * speakers.length)];
-          const randomLanguage = languages[Math.floor(Math.random() * languages.length)];
+      if (!SpeechRecognition) {
+        console.error('Speech recognition not supported');
+        // Fallback to mock for demo
+        startMockTranscription();
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US'; // Default language
+      
+      recognition.onresult = (event) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
           
-          onTranscription(randomText, randomSpeaker, randomLanguage, new Date());
-          
-          if (isRecording && !isPaused) {
-            mockTranscription();
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
           }
         }
-      }, 2000 + Math.random() * 3000);
-    };
+
+        if (finalTranscript) {
+          // Simple speaker detection based on silence gaps
+          const currentSpeaker = `Speaker ${speakerCountRef.current}`;
+          
+          // Detect language (simple Tamil vs English detection)
+          const isTamil = /[\u0B80-\u0BFF]/.test(finalTranscript);
+          const language = isTamil ? 'Tamil' : 'English';
+          
+          onTranscription(finalTranscript.trim(), currentSpeaker, language, new Date());
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        // Fallback to mock on error
+        startMockTranscription();
+      };
+
+      recognition.onend = () => {
+        if (isRecording && !isPaused) {
+          // Restart recognition if still recording
+          setTimeout(() => {
+            if (recognitionRef.current && isRecording && !isPaused) {
+              recognitionRef.current.start();
+            }
+          }, 100);
+        }
+      };
+
+      recognition.start();
+      
+    } catch (error) {
+      console.error('Error starting speech recognition:', error);
+      startMockTranscription();
+    }
+  };
+
+  const startMockTranscription = () => {
+    const sampleTexts = [
+      "Hello, welcome to the meeting",
+      "நல்ல காலை, கூட்டத்திற்கு வரவேற்கிறோம்",
+      "Let's discuss the project updates",
+      "இந்த திட்டத்தின் முன்னேற்றத்தைப் பற்றி பேசுவோம்"
+    ];
     
-    mockTranscription();
+    const mockInterval = setInterval(() => {
+      if (!isRecording || isPaused) {
+        clearInterval(mockInterval);
+        return;
+      }
+      
+      const randomText = sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
+      const currentSpeaker = `Speaker ${Math.ceil(Math.random() * 3)}`;
+      const isTamil = randomText.includes('நல்ல') || randomText.includes('திட்டத்தின்');
+      const language = isTamil ? 'Tamil' : 'English';
+      
+      onTranscription(randomText, currentSpeaker, language, new Date());
+    }, 3000 + Math.random() * 2000);
   };
 
   const pauseRecording = () => {
@@ -120,6 +205,10 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   };
 
   const stopRecording = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
     onRecordingChange(false);
     setIsPaused(false);
   };
@@ -179,46 +268,64 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="flex space-x-4">
-          {!isRecording ? (
-            <Button
-              onClick={startRecording}
-              className="bg-gradient-primary hover:opacity-90 px-8 py-3 text-lg font-semibold shadow-primary"
-            >
-              <Mic className="w-5 h-5 mr-2" />
-              Start Recording
-            </Button>
-          ) : (
-            <div className="flex space-x-2">
-              {isPaused ? (
-                <Button
-                  onClick={resumeRecording}
-                  variant="secondary"
-                  className="px-6"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Resume
-                </Button>
-              ) : (
-                <Button
-                  onClick={pauseRecording}
-                  variant="secondary"
-                  className="px-6"
-                >
-                  <Pause className="w-4 h-4 mr-2" />
-                  Pause
-                </Button>
-              )}
+        <div className="flex flex-col space-y-4">
+          <div className="flex space-x-4 justify-center">
+            {!isRecording ? (
               <Button
-                onClick={stopRecording}
-                variant="destructive"
-                className="px-6"
+                onClick={startRecording}
+                className="bg-gradient-primary hover:opacity-90 px-8 py-3 text-lg font-semibold shadow-primary"
               >
-                <Square className="w-4 h-4 mr-2" />
-                Stop
+                <Mic className="w-5 h-5 mr-2" />
+                Start Recording
               </Button>
-            </div>
-          )}
+            ) : (
+              <div className="flex space-x-2">
+                {isPaused ? (
+                  <Button
+                    onClick={resumeRecording}
+                    variant="secondary"
+                    className="px-6"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Resume
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={pauseRecording}
+                    variant="secondary"
+                    className="px-6"
+                  >
+                    <Pause className="w-4 h-4 mr-2" />
+                    Pause
+                  </Button>
+                )}
+                <Button
+                  onClick={stopRecording}
+                  variant="destructive"
+                  className="px-6"
+                >
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          {/* Speaker Controls */}
+          <div className="flex justify-center">
+            <Button
+              onClick={() => {
+                speakerCountRef.current += 1;
+                onAddSpeaker?.();
+              }}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              <User className="w-3 h-3 mr-1" />
+              Add New Speaker
+            </Button>
+          </div>
         </div>
 
         {/* Status */}
